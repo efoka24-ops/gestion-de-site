@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pilotage Usine — Salle de contrôle</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --panel:#ffffff; --ink:#1a1d23; --muted:#6b7280;
+    --line:#e5e7eb; --side:#161a21; --side2:#1e242e; --side-ink:#c8cfda;
+    --amber:#e0a83b; --amber-d:#c8912a; --amber-soft:#fbf1dd;
+    --green:#1f9d63; --green-soft:#e3f5eb; --red:#d1493f; --red-soft:#fbe7e5;
+    --blue:#3b74c8; --blue-soft:#e6eefa;
+    --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.1);
+    --f-head:'Space Grotesk','Segoe UI',sans-serif; --f-body:'Inter','Segoe UI',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px}
+  h1,h2,h3,h4{font-family:var(--f-head);margin:0;font-weight:600}
+  button{font-family:inherit;cursor:pointer}
+  input,select,textarea{font-family:inherit;font-size:14px}
+  .app{display:flex;min-height:100vh}
+  .side{width:240px;background:var(--side);color:var(--side-ink);display:flex;flex-direction:column;position:fixed;height:100vh;z-index:40;transition:transform .25s}
+  .brand{padding:20px 18px;border-bottom:1px solid #262c37;display:flex;align-items:center;gap:11px}
+  .brand .dot{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--amber),var(--amber-d));display:flex;align-items:center;justify-content:center;font-family:var(--f-head);font-weight:700;color:#161a21}
+  .brand h1{color:#fff;font-size:16px;line-height:1.1}
+  .brand small{color:#7c8797;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+  .nav{flex:1;padding:12px 10px;overflow-y:auto}
+  .nav button{width:100%;display:flex;align-items:center;gap:11px;background:none;border:0;color:var(--side-ink);padding:10px 12px;border-radius:8px;text-align:left;font-size:13.5px;font-weight:500;margin-bottom:2px}
+  .nav button:hover{background:var(--side2);color:#fff}
+  .nav button.on{background:var(--amber-soft);color:#161a21;font-weight:600}
+  .nav .ic{width:20px;text-align:center;font-size:15px}
+  .side-foot{padding:12px 14px;border-top:1px solid #262c37;font-size:11px;color:#6b7480}
+  .main{flex:1;margin-left:240px;min-width:0}
+  .topbar{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:30}
+  .topbar h2{font-size:19px}
+  .topbar .sub{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .burger{display:none;background:none;border:0;font-size:22px;color:var(--ink)}
+  .wrap{padding:24px 26px;max-width:1240px}
+  .warnbar{background:var(--red-soft);color:var(--red);padding:9px 26px;font-size:12.5px;font-weight:500;border-bottom:1px solid #f0cfcb}
+  .grid{display:grid;gap:16px}
+  .g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:repeat(2,1fr)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+  .card.p{padding:18px}
+  .stat{padding:18px}
+  .stat .lab{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+  .stat .val{font-family:var(--f-head);font-size:30px;font-weight:700;margin-top:6px;line-height:1}
+  .stat .meta{font-size:12.5px;margin-top:7px;color:var(--muted)}
+  .stat .top{display:flex;justify-content:space-between;align-items:flex-start}
+  .stat .chip{font-size:16px;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center}
+  .sec-title{display:flex;align-items:center;justify-content:space-between;margin:26px 0 12px;gap:12px;flex-wrap:wrap}
+  .sec-title h3{font-size:16px}
+  .sec-title.first{margin-top:4px}
+  .btn{background:var(--amber);color:#161a21;border:0;padding:9px 15px;border-radius:8px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:7px}
+  .btn:hover{background:var(--amber-d)}
+  .btn.ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
+  .btn.ghost:hover{background:#f7f8fa}
+  .btn.dark{background:var(--side);color:#fff}.btn.dark:hover{background:var(--side2)}
+  .btn.sm{padding:6px 11px;font-size:12px}
+  .btn.danger{background:#fff;border:1px solid var(--red);color:var(--red)}.btn.danger:hover{background:var(--red-soft)}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;padding:11px 14px;border-bottom:1px solid var(--line);background:#fafbfc}
+  td{padding:12px 14px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  .tbl-wrap{overflow-x:auto}
+  .badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:600}
+  .b-green{background:var(--green-soft);color:var(--green)}.b-red{background:var(--red-soft);color:var(--red)}
+  .b-amber{background:var(--amber-soft);color:var(--amber-d)}.b-blue{background:var(--blue-soft);color:var(--blue)}
+  .b-gray{background:#eef0f3;color:#6b7280}
+  .gauge{height:8px;border-radius:6px;background:#eceef1;overflow:hidden;min-width:90px}
+  .gauge > i{display:block;height:100%;border-radius:6px}
+  .field{margin-bottom:13px}
+  .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:#374151}
+  .field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;outline:none}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-soft)}
+  .field textarea{resize:vertical;min-height:70px}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .overlay{position:fixed;inset:0;background:rgba(16,20,27,.5);z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
+  .modal{background:#fff;border-radius:14px;width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .modal.wide{max-width:760px}
+  .modal .mh{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+  .modal .mh h3{font-size:17px}
+  .modal .mb{padding:20px 22px}
+  .modal .mf{padding:15px 22px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:9px;background:#fafbfc;border-radius:0 0 14px 14px}
+  .x{background:none;border:0;font-size:22px;color:var(--muted);line-height:1}
+  .toasts{position:fixed;bottom:22px;right:22px;z-index:80;display:flex;flex-direction:column;gap:10px}
+  .toast{background:var(--side);color:#fff;padding:12px 16px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:13.5px;display:flex;align-items:center;gap:10px;min-width:230px;animation:slide .25s}
+  .toast.ok{border-left:4px solid var(--green)}.toast.err{border-left:4px solid var(--red)}.toast.info{border-left:4px solid var(--amber)}
+  @keyframes slide{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
+  .empty{text-align:center;padding:46px 20px;color:var(--muted)}
+  .empty .e-ic{font-size:38px;opacity:.5}
+  .empty h4{font-family:var(--f-head);font-size:16px;color:var(--ink);margin:12px 0 5px}
+  .check{display:flex;align-items:center;gap:12px;padding:13px 15px;border:1px solid var(--line);border-radius:10px;margin-bottom:9px;background:#fff}
+  .check.done{background:var(--green-soft);border-color:#bfe6cf}
+  .check input{width:19px;height:19px;accent-color:var(--green);cursor:pointer}
+  .check .txt{flex:1}.check.done .txt .lbl{text-decoration:line-through;color:var(--muted)}
+  .check .t{font-size:11px;color:var(--muted)}
+  .pipe{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
+  .stage{min-width:180px;flex:1;background:#fafbfc;border:1px solid var(--line);border-radius:10px;padding:12px}
+  .stage h4{font-size:12.5px;color:#374151;display:flex;justify-content:space-between;margin-bottom:10px}
+  .cand .n{font-weight:600}
+  .pill-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .pill{padding:7px 13px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:13px;font-weight:500}
+  .pill.on{background:var(--side);color:#fff;border-color:var(--side)}
+  .muted{color:var(--muted)}
+  .prio{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .prio:last-child{border:0}
+  .prio .dotp{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+  .kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px;gap:14px}
+  .kv:last-child{border:0}.kv .k{color:var(--muted);white-space:nowrap}
+  .kv .v{text-align:right}
+  @media(max-width:860px){
+    .side{transform:translateX(-100%)}.side.open{transform:none}
+    .main{margin-left:0}.burger{display:block}
+    .g4{grid-template-columns:1fr 1fr}.g3,.g2{grid-template-columns:1fr}.frow{grid-template-columns:1fr}
+    .wrap{padding:16px}
+  }
+  @media print{
+    .side,.topbar,.burger,.no-print,.warnbar{display:none!important}
+    .main{margin:0}.wrap{padding:0;max-width:none}
+    body{background:#fff}.card{box-shadow:none;border:1px solid #ccc}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand"><div class="dot">PU</div><div><h1>Pilotage Usine</h1><small>Douala · Agro</small></div></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot">Application hors-ligne · v2</div>
+  </aside>
+  <div class="main">
+    <div id="warn"></div>
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="burger" id="burger">☰</button>
+        <div><h2 id="ttl">Tableau de bord</h2><div class="sub" id="sub"></div></div>
+      </div>
+      <div class="no-print" style="display:flex;gap:9px">
+        <button class="btn ghost sm" id="print">🖨 Imprimer</button>
+        <button class="btn sm" id="excel">⬇ Excel</button>
+      </div>
+    </div>
+    <div class="wrap" id="content"></div>
+  </div>
+</div>
+<div class="toasts" id="toasts"></div>
+<div id="modalRoot"></div>
+
+<script>
+"use strict";
+/* ============ Persistence ============ */
+var KEY="usine_pilotage_v1", STORAGE_OK=true;
+try{ localStorage.setItem("__t","1"); localStorage.removeItem("__t"); }catch(e){ STORAGE_OK=false; }
+var todayISO=function(){ return new Date().toISOString().slice(0,10); };
+function isoWeek(d){ d=d||new Date();
+  var t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  var day=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day);
+  var ys=new Date(Date.UTC(t.getUTCFullYear(),0,1));
+  var w=Math.ceil((((t-ys)/86400000)+1)/7);
+  return t.getUTCFullYear()+"-S"+String(w).padStart(2,"0"); }
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+
+function seed(){ return {
+  tab:"dash",
+  postes:[
+    {id:uid(),intitule:"Chef d'équipe production",rattach:"Responsable de production",mission:"Encadrer l'équipe et garantir l'atteinte des objectifs de production dans le respect des normes.",activites:"Planifier le travail des opérateurs ; superviser les lignes ; contrôler la conformité ; rédiger le rapport de production.",competences:"Leadership, organisation, procédés agroalimentaires, HACCP.",diplome:"Bac+2 minimum, 3 ans d'expérience",horaires:"2x8 (6h-14h / 14h-22h)",kpi:"Réalisation vs objectif ≥ 95%"},
+    {id:uid(),intitule:"Opérateur de production",rattach:"Chef d'équipe production",mission:"Réaliser les opérations de fabrication et de conditionnement selon les consignes.",activites:"Alimenter les machines ; conditionner ; nettoyer le poste ; signaler les anomalies.",competences:"Rigueur, hygiène, dextérité.",diplome:"CEP/BEPC, formation interne",horaires:"2x8",kpi:"Cadence horaire, rebut < 2%"},
+    {id:uid(),intitule:"Agent de contrôle qualité",rattach:"Responsable qualité",mission:"Vérifier la conformité des matières premières et des produits finis.",activites:"Prélèvements ; tests ; enregistrement ; blocage des lots non conformes.",competences:"HACCP, laboratoire, traçabilité.",diplome:"Bac+2 biologie/agroalimentaire",horaires:"Journée 8h-17h",kpi:"100% des lots contrôlés"},
+    {id:uid(),intitule:"Magasinier",rattach:"Responsable logistique",mission:"Gérer les stocks de matières premières et de produits finis.",activites:"Réception ; rangement ; sorties ; inventaire ; suivi des seuils.",competences:"Gestion de stock, FIFO, informatique.",diplome:"Bac, expérience en magasinage",horaires:"Journée 7h-16h",kpi:"Écart d'inventaire < 1%"},
+    {id:uid(),intitule:"Agent administratif / RH",rattach:"Direction",mission:"Assurer la gestion administrative et le suivi du personnel.",activites:"Présences ; contrats ; paie ; classement ; recrutement.",competences:"Bureautique, droit du travail, discrétion.",diplome:"Bac+2 gestion/RH",horaires:"Journée 8h-17h",kpi:"Dossiers du personnel à jour"},
+    {id:uid(),intitule:"Agent de maintenance",rattach:"Responsable technique",mission:"Assurer le bon fonctionnement des équipements.",activites:"Maintenance préventive et curative ; dépannage ; suivi.",competences:"Électromécanique, hydraulique, réactivité.",diplome:"Bac+2 maintenance industrielle",horaires:"Journée + astreinte",kpi:"Disponibilité machines ≥ 97%"}
+  ],
+  procedures:{
+    reception:["Vérifier le bon de livraison vs commande","Contrôler l'état des emballages","Vérifier les dates de péremption","Peser / compter les quantités reçues","Prélever un échantillon pour le contrôle qualité","Enregistrer la réception dans le stock","Ranger selon la règle FIFO"],
+    qualite:["Prélever les échantillons du lot","Contrôle visuel (aspect, corps étrangers)","Mesures physico-chimiques (pH, humidité...)","Vérifier l'étiquetage et la traçabilité","Enregistrer les résultats","Statuer : conforme / non conforme","Bloquer et isoler les lots non conformes"],
+    sortie:["Vérifier le bon de commande client","Contrôler la conformité des produits finis","Vérifier les quantités et les dates","Enregistrer la sortie dans le stock","Éditer le bon de livraison","Charger et vérifier le transport"]
+  },
+  procState:{date:todayISO(),reception:[],qualite:[],sortie:[]},
+  stocks:[
+    {id:uid(),ref:"MP-001",designation:"Farine de blé",unite:"kg",stock:120,seuil:200,fournisseur:"Minoterie du Wouri"},
+    {id:uid(),ref:"MP-002",designation:"Sucre",unite:"kg",stock:340,seuil:150,fournisseur:"Sosucam"},
+    {id:uid(),ref:"MP-003",designation:"Huile végétale",unite:"L",stock:80,seuil:100,fournisseur:"Azur SA"},
+    {id:uid(),ref:"EMB-001",designation:"Sachets plastiques 500g",unite:"unité",stock:5000,seuil:2000,fournisseur:"Plasticam"}
+  ],
+  mouvements:[],
+  recrutement:{},
+  candidats:[],
+  reports:[],
+  production:[],
+  employes:[
+    {id:uid(),nom:"Jean Mbarga",poste:"Chef d'équipe production",presence:{},absences:0},
+    {id:uid(),nom:"Aline Ngo",poste:"Opérateur de production",presence:{},absences:0},
+    {id:uid(),nom:"Paul Etoa",poste:"Agent de contrôle qualité",presence:{},absences:0},
+    {id:uid(),nom:"Rita Fokou",poste:"Magasinier",presence:{},absences:0}
+  ]
+}; }
+
+function load(){ try{ var r=localStorage.getItem(KEY); if(r){ var s=seed(); var p=JSON.parse(r); for(var k in p) s[k]=p[k]; return s; } }catch(e){} return seed(); }
+var DB=load();
+function save(){ if(!STORAGE_OK) return; try{ localStorage.setItem(KEY,JSON.stringify(DB)); }catch(e){} }
+
+/* daily reset of procedures */
+if(DB.procState.date!==todayISO()){ DB.procState={date:todayISO(),reception:[],qualite:[],sortie:[]}; save(); }
+
+var STAGES=[
+  {k:"besoin",l:"Besoin défini",c:"var(--muted)"},
+  {k:"annonce",l:"Annonce diffusée",c:"var(--blue)"},
+  {k:"cv",l:"CV triés",c:"var(--amber-d)"},
+  {k:"entretien",l:"Entretiens",c:"#8b5cf6"},
+  {k:"recrute",l:"Recruté",c:"var(--green)"}
+];
+
+var NAV=[
+  {k:"dash",l:"Tableau de bord",i:"▤"},{k:"postes",l:"Fiches de poste",i:"▦"},
+  {k:"proc",l:"Procédures",i:"✓"},{k:"stocks",l:"Suivi des stocks",i:"▥"},
+  {k:"recrut",l:"Recrutement",i:"◉"},{k:"report",l:"Reporting hebdo",i:"❋"},
+  {k:"prod",l:"Production journalière",i:"▲"},{k:"rh",l:"Administration RH",i:"◈"}
+];
+var TITLES={dash:["Tableau de bord","Vue d'ensemble de l'activité du jour"],postes:["Fiches de poste","Définition des postes clés de l'usine"],proc:["Procédures","Checklists opérationnelles quotidiennes"],stocks:["Suivi des stocks","Niveaux, alertes et mouvements"],recrut:["Recrutement","Pipeline et candidats par poste"],report:["Reporting hebdomadaire","Bilans par semaine ISO"],prod:["Production journalière","Objectifs, réalisé et écarts"],rh:["Administration RH","Personnel et présences"]};
+
+/* ============ Toast ============ */
+function toast(msg,type){ type=type||"ok"; var el=document.getElementById("toasts");
+  var d=document.createElement("div"); d.className="toast "+type;
+  d.innerHTML="<span>"+(type==="ok"?"✓":type==="err"?"⚠":"ℹ")+"</span>"+esc(msg);
+  el.appendChild(d); setTimeout(function(){ if(d.parentNode) d.parentNode.removeChild(d); },3000); }
+
+/* ============ Modal ============ */
+function openModal(opts){ // {title,body,wide,footer:[{label,cls,onClick}]}
+  var root=document.getElementById("modalRoot");
+  var ov=document.createElement("div"); ov.className="overlay";
+  var footHtml=(opts.footer||[]).map(function(b,i){ return '<button class="btn '+(b.cls||"")+'" data-fi="'+i+'">'+esc(b.label)+'</button>'; }).join("");
+  ov.innerHTML='<div class="modal'+(opts.wide?" wide":"")+'"><div class="mh"><h3>'+esc(opts.title)+'</h3><button class="x" data-close="1">×</button></div><div class="mb">'+opts.body+'</div>'+(footHtml?'<div class="mf">'+footHtml+'</div>':'')+'</div>';
+  function close(){ if(ov.parentNode) root.removeChild(ov); }
+  ov.addEventListener("click",function(e){ if(e.target===ov||e.target.getAttribute("data-close")) close(); });
+  (opts.footer||[]).forEach(function(b,i){ var btn=ov.querySelector('[data-fi="'+i+'"]');
+    btn.addEventListener("click",function(){ if(!b.onClick||b.onClick(ov)!==false) close(); }); });
+  root.appendChild(ov);
+  var f=ov.querySelector("input,textarea,select"); if(f) f.focus();
+  return {overlay:ov,close:close};
+}
+function val(ov,name){ var e=ov.querySelector('[name="'+name+'"]'); return e?e.value:""; }
+
+/* ============ Render ============ */
+function setTab(t){ DB.tab=t; save(); render(); }
+function render(){
+  document.getElementById("nav").innerHTML=NAV.map(function(n){ return '<button class="'+(DB.tab===n.k?"on":"")+'" data-tab="'+n.k+'"><span class="ic">'+n.i+'</span>'+n.l+'</button>'; }).join("");
+  document.getElementById("ttl").textContent=TITLES[DB.tab][0];
+  document.getElementById("sub").textContent=TITLES[DB.tab][1];
+  document.getElementById("warn").innerHTML = STORAGE_OK ? "" : '<div class="warnbar">⚠ Le stockage du navigateur est bloqué (mode fichier local / protection anti-traçage). Les données ne seront pas conservées à la fermeture — exportez régulièrement en Excel. Astuce : ouvrez ce fichier via un petit serveur local, ou autorisez le stockage pour ce site.</div>';
+  var v={dash:viewDash,postes:viewPostes,proc:viewProc,stocks:viewStocks,recrut:viewRecrut,report:viewReport,prod:viewProd,rh:viewRH}[DB.tab];
+  document.getElementById("content").innerHTML=v();
+  var binder={dash:bindDash,postes:bindPostes,proc:bindProc,stocks:bindStocks,recrut:bindRecrut,report:bindReport,prod:bindProd,rh:bindRH}[DB.tab];
+  if(binder) binder();
+}
+function emptyBox(icon,title,text){ return '<div class="card"><div class="empty"><div class="e-ic">'+icon+'</div><h4>'+esc(title)+'</h4><div>'+esc(text)+'</div></div></div>'; }
+
+/* ---- Dashboard ---- */
+function viewDash(){
+  var alerts=DB.stocks.filter(function(s){return s.stock<s.seuil;});
+  var pt=DB.production.filter(function(p){return p.date===todayISO();});
+  var obj=pt.reduce(function(a,p){return a+Number(p.objectif||0);},0);
+  var real=pt.reduce(function(a,p){return a+Number(p.realise||0);},0);
+  var pct=obj?Math.round(real/obj*100):0;
+  var recrutOuvert=Object.keys(DB.recrutement).filter(function(k){var r=DB.recrutement[k];return r.stage&&r.stage!=="recrute";}).length;
+  var last=DB.reports[DB.reports.length-1];
+  var absToday=DB.employes.filter(function(e){return e.presence[todayISO()]==="absent";}).length;
+  var prio=[];
+  alerts.forEach(function(s){prio.push({c:"var(--red)",t:"Réapprovisionner « "+s.designation+" » — stock "+s.stock+s.unite+" < seuil "+s.seuil});});
+  if(obj&&pct<95) prio.push({c:"var(--amber)",t:"Production du jour à "+pct+"% de l'objectif — analyser les blocages"});
+  if(absToday>0) prio.push({c:"var(--amber)",t:absToday+" absence(s) déclarée(s) aujourd'hui — réorganiser les équipes"});
+  if(recrutOuvert>0) prio.push({c:"var(--blue)",t:recrutOuvert+" recrutement(s) en cours — faire avancer le pipeline"});
+  if(!last||last.semaine!==isoWeek()) prio.push({c:"var(--muted)",t:"Aucun rapport pour la semaine "+isoWeek()+" — à rédiger"});
+  function card(lab,val,color,chip,chipbg,meta){ return '<div class="card stat"><div class="top"><div><div class="lab">'+lab+'</div><div class="val" style="color:'+(color||"var(--ink)")+'">'+val+'</div></div><div class="chip" style="background:'+chipbg+'">'+chip+'</div></div><div class="meta">'+meta+'</div></div>'; }
+  var html='<div class="grid g4">'+
+    card("Alertes stock",alerts.length,alerts.length?"var(--red)":"var(--green)","▥","var(--red-soft)",alerts.length?"article(s) sous le seuil":"tous les stocks OK")+
+    card("Recrutement",recrutOuvert,"var(--ink)","◉","var(--blue-soft)","poste(s) en cours")+
+    card("Production du jour",obj?pct+"%":"—",pct>=95?"var(--green)":pct>=70?"var(--amber-d)":"var(--red)","▲","var(--amber-soft)",obj?real+" / "+obj+" réalisé":"aucune saisie")+
+    card("Dernier rapport",last?last.semaine:"—","var(--ink)","❋","#eef0f3",last?"bilan enregistré":"aucun rapport")+
+    '</div><div class="grid g2" style="margin-top:16px"><div class="card p"><div class="sec-title first"><h3>Priorités du jour</h3></div>';
+  if(prio.length===0) html+='<div class="empty"><div class="e-ic">✓</div><h4>Tout est sous contrôle</h4><div>Aucune priorité urgente détectée.</div></div>';
+  else prio.forEach(function(p){ html+='<div class="prio"><span class="dotp" style="background:'+p.c+'"></span><span>'+esc(p.t)+'</span></div>'; });
+  html+='</div><div class="card p"><div class="sec-title first"><h3>Accès rapide</h3></div><div class="grid g2" style="gap:10px">'+
+    '<button class="btn ghost" data-go="stocks">▥ Voir les stocks</button><button class="btn ghost" data-go="prod">▲ Saisir la production</button>'+
+    '<button class="btn ghost" data-go="proc">✓ Checklists du jour</button><button class="btn ghost" data-go="report">❋ Rédiger le rapport</button>'+
+    '<button class="btn ghost" data-go="rh">◈ Pointer les présences</button><button class="btn ghost" data-go="recrut">◉ Suivi recrutement</button>'+
+    '</div></div></div>';
+  return html;
+}
+function bindDash(){ Array.prototype.forEach.call(document.querySelectorAll("[data-go]"),function(b){ b.onclick=function(){setTab(b.getAttribute("data-go"));}; }); }
+
+/* ---- Postes ---- */
+function viewPostes(){
+  var html='<div class="sec-title first no-print"><h3>'+DB.postes.length+' fiche(s) de poste</h3><button class="btn" id="addPoste">+ Nouvelle fiche</button></div>';
+  if(DB.postes.length===0) return html+emptyBox("▦","Aucune fiche de poste","Créez la première fiche pour définir un poste.");
+  html+='<div class="grid g2">';
+  DB.postes.forEach(function(p){
+    function kv(k,v,extra){ return v?'<div class="kv"><span class="k">'+k+'</span><span class="v" '+(extra||"")+'>'+esc(v)+'</span></div>':''; }
+    html+='<div class="card p"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><h3 style="font-size:15.5px">'+esc(p.intitule)+'</h3><div class="muted" style="font-size:12.5px;margin-top:3px">↳ '+esc(p.rattach||"—")+'</div></div>'+
+      '<div class="no-print" style="display:flex;gap:6px;flex-shrink:0"><button class="btn ghost sm" data-edit="'+p.id+'">Modifier</button><button class="btn danger sm" data-del="'+p.id+'">✕</button></div></div>'+
+      '<div style="margin-top:12px">'+kv("Mission",p.mission)+kv("Compétences",p.competences)+kv("Diplôme/Exp.",p.diplome)+kv("Horaires",p.horaires)+kv("Indicateur",p.kpi,'style="text-align:right;color:var(--amber-d);font-weight:600"')+'</div></div>';
+  });
+  return html+'</div>';
+}
+function posteForm(p){ p=p||{}; function f(n,l,ta){ var v=esc(p[n]||""); return '<div class="field"><label>'+l+'</label>'+(ta?'<textarea name="'+n+'">'+v+'</textarea>':'<input name="'+n+'" value="'+v+'"/>')+'</div>'; }
+  return '<div class="frow">'+f("intitule","Intitulé du poste *")+f("rattach","Rattachement hiérarchique")+'</div>'+f("mission","Mission",1)+f("activites","Activités principales",1)+f("competences","Compétences requises",1)+'<div class="frow">'+f("diplome","Diplôme / expérience")+f("horaires","Horaires")+'</div>'+f("kpi","Indicateur de performance (KPI)"); }
+function bindPostes(){
+  document.getElementById("addPoste") && (document.getElementById("addPoste").onclick=function(){ editPoste(null); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-edit]"),function(b){ b.onclick=function(){ editPoste(b.getAttribute("data-edit")); }; });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-del]"),function(b){ b.onclick=function(){ if(confirm("Supprimer cette fiche de poste ?")){ DB.postes=DB.postes.filter(function(x){return x.id!==b.getAttribute("data-del");}); save(); render(); toast("Fiche supprimée","info"); } }; });
+}
+function editPoste(id){ var p=id?DB.postes.filter(function(x){return x.id===id;})[0]:null;
+  openModal({wide:true,title:id?"Modifier la fiche de poste":"Nouvelle fiche de poste",body:posteForm(p),
+    footer:[{label:"Annuler",cls:"ghost"},{label:"Enregistrer",onClick:function(ov){
+      var d={intitule:val(ov,"intitule").trim(),rattach:val(ov,"rattach"),mission:val(ov,"mission"),activites:val(ov,"activites"),competences:val(ov,"competences"),diplome:val(ov,"diplome"),horaires:val(ov,"horaires"),kpi:val(ov,"kpi")};
+      if(!d.intitule){ toast("L'intitulé est obligatoire","err"); return false; }
+      if(id){ DB.postes=DB.postes.map(function(x){return x.id===id?Object.assign(x,d):x;}); } else { d.id=uid(); DB.postes.push(d); }
+      save(); render(); toast(id?"Fiche modifiée":"Fiche créée");
+    }}]});
+}
+
+/* ---- Procédures ---- */
+var procSel="reception";
+function viewProc(){
+  if(DB.procState.date!==todayISO()) DB.procState={date:todayISO(),reception:[],qualite:[],sortie:[]};
+  var defs=[{k:"reception",l:"Réception des matières premières",i:"📥"},{k:"qualite",l:"Contrôle qualité",i:"🔬"},{k:"sortie",l:"Sortie des produits finis",i:"📤"}];
+  var html='<div class="pill-row no-print">'+defs.map(function(d){ var c=(DB.procState[d.k]||[]).length,t=DB.procedures[d.k].length; return '<button class="pill'+(procSel===d.k?" on":"")+'" data-proc="'+d.k+'">'+d.i+' '+d.l+' <span class="muted" style="font-size:11px">('+c+'/'+t+')</span></button>'; }).join("")+'</div>';
+  var def=defs.filter(function(d){return d.k===procSel;})[0];
+  var items=DB.procedures[procSel]||[], checked=DB.procState[procSel]||[];
+  html+='<div class="card p"><div class="sec-title first"><h3>'+def.l+'</h3><span class="muted" style="font-size:12.5px">Réinitialisé chaque jour · '+DB.procState.date+'</span></div>';
+  if(checked.length===items.length&&items.length) html+='<div class="badge b-green" style="margin-bottom:12px">✓ Procédure complète pour aujourd\'hui</div>';
+  items.forEach(function(it,i){ var on=checked.indexOf(i)>=0;
+    html+='<label class="check'+(on?" done":"")+'"><input type="checkbox" data-chk="'+i+'"'+(on?" checked":"")+'/><div class="txt"><div class="lbl">'+esc(it)+'</div>'+(on?'<div class="t">✓ validé le '+DB.procState.date+'</div>':'')+'</div></label>';
+  });
+  return html+'</div>';
+}
+function bindProc(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-proc]"),function(b){ b.onclick=function(){ procSel=b.getAttribute("data-proc"); render(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-chk]"),function(b){ b.onchange=function(){ var i=Number(b.getAttribute("data-chk")); var cur=DB.procState[procSel]||[]; if(cur.indexOf(i)>=0) cur=cur.filter(function(x){return x!==i;}); else cur=cur.concat([i]); DB.procState[procSel]=cur; save(); render(); }; });
+}
+
+/* ---- Stocks ---- */
+function viewStocks(){
+  var alerts=DB.stocks.filter(function(s){return s.stock<s.seuil;}).length;
+  var html='<div class="sec-title first no-print"><h3>'+DB.stocks.length+' article(s)'+(alerts?' <span class="badge b-red" style="margin-left:10px">⚠ '+alerts+' sous seuil</span>':'')+'</h3><button class="btn" id="addStock">+ Article</button></div>';
+  if(DB.stocks.length===0) html+=emptyBox("▥","Aucun article en stock","Ajoutez un article pour commencer le suivi.");
+  else{
+    html+='<div class="card tbl-wrap"><table><thead><tr><th>Réf.</th><th>Désignation</th><th>Niveau</th><th>Stock</th><th>Seuil</th><th>Fournisseur</th><th class="no-print"></th></tr></thead><tbody>';
+    DB.stocks.forEach(function(s){ var under=s.stock<s.seuil; var ratio=Math.min(100,Math.round(s.stock/Math.max(s.seuil*1.5,1)*100));
+      html+='<tr><td><b>'+esc(s.ref)+'</b></td><td>'+esc(s.designation)+(under?' <span class="badge b-red" style="margin-left:8px">alerte</span>':'')+'</td>'+
+        '<td><div class="gauge"><i style="width:'+ratio+'%;background:'+(under?"var(--red)":ratio<50?"var(--amber)":"var(--green)")+'"></i></div></td>'+
+        '<td><b>'+s.stock+'</b> '+esc(s.unite)+'</td><td class="muted">'+s.seuil+' '+esc(s.unite)+'</td><td class="muted">'+esc(s.fournisseur||"—")+'</td>'+
+        '<td class="no-print" style="white-space:nowrap"><button class="btn dark sm" data-mvt="'+s.id+'">± Mvt</button> <button class="btn ghost sm" data-edit="'+s.id+'">✎</button> <button class="btn danger sm" data-del="'+s.id+'">✕</button></td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  if(DB.mouvements.length){
+    html+='<div class="sec-title"><h3>Derniers mouvements</h3></div><div class="card tbl-wrap"><table><thead><tr><th>Date</th><th>Article</th><th>Type</th><th>Qté</th><th>Stock après</th><th>Note</th></tr></thead><tbody>';
+    DB.mouvements.slice(0,12).forEach(function(m){ html+='<tr><td class="muted">'+m.date+'</td><td>'+esc(m.article)+'</td><td><span class="badge '+(m.type==="entree"?"b-green":"b-amber")+'">'+(m.type==="entree"?"↓ Entrée":"↑ Sortie")+'</span></td><td><b>'+m.qte+'</b></td><td>'+m.stock_apres+'</td><td class="muted">'+esc(m.note||"—")+'</td></tr>'; });
+    html+='</tbody></table></div>';
+  }
+  return html;
+}
+function stockForm(s){ s=s||{unite:"kg"}; return '<div class="frow"><div class="field"><label>Référence</label><input name="ref" value="'+esc(s.ref||"")+'"/></div><div class="field"><label>Unité</label><select name="unite">'+["kg","L","unité","carton","sac"].map(function(u){return '<option'+(s.unite===u?" selected":"")+'>'+u+'</option>';}).join("")+'</select></div></div><div class="field"><label>Désignation *</label><input name="designation" value="'+esc(s.designation||"")+'"/></div><div class="frow"><div class="field"><label>Stock actuel</label><input type="number" name="stock" value="'+(s.stock!=null?s.stock:0)+'"/></div><div class="field"><label>Seuil d\'alerte</label><input type="number" name="seuil" value="'+(s.seuil!=null?s.seuil:0)+'"/></div></div><div class="field"><label>Fournisseur</label><input name="fournisseur" value="'+esc(s.fournisseur||"")+'"/></div>'; }
+function bindStocks(){
+  document.getElementById("addStock") && (document.getElementById("addStock").onclick=function(){ editStock(null); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-edit]"),function(b){ b.onclick=function(){ editStock(b.getAttribute("data-edit")); }; });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-mvt]"),function(b){ b.onclick=function(){ mvtStock(b.getAttribute("data-mvt")); }; });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-del]"),function(b){ b.onclick=function(){ if(confirm("Supprimer cet article ?")){ DB.stocks=DB.stocks.filter(function(x){return x.id!==b.getAttribute("data-del");}); save(); render(); toast("Article supprimé","info"); } }; });
+}
+function editStock(id){ var s=id?DB.stocks.filter(function(x){return x.id===id;})[0]:null;
+  openModal({title:id?"Modifier l'article":"Nouvel article",body:stockForm(s),footer:[{label:"Annuler",cls:"ghost"},{label:"Enregistrer",onClick:function(ov){
+    var d={ref:val(ov,"ref"),unite:val(ov,"unite"),designation:val(ov,"designation").trim(),stock:Number(val(ov,"stock")||0),seuil:Number(val(ov,"seuil")||0),fournisseur:val(ov,"fournisseur")};
+    if(!d.designation){ toast("La désignation est obligatoire","err"); return false; }
+    if(id){ DB.stocks=DB.stocks.map(function(x){return x.id===id?Object.assign(x,d):x;}); } else { d.id=uid(); DB.stocks.push(d); }
+    save(); render(); toast(id?"Article modifié":"Article ajouté");
+  }}]});
+}
+function mvtStock(id){ var s=DB.stocks.filter(function(x){return x.id===id;})[0]; if(!s) return; var type="entree";
+  var body='<div class="muted" style="margin-bottom:12px">Stock actuel : <b>'+s.stock+' '+esc(s.unite)+'</b></div><div class="pill-row" id="mvtType"><button type="button" class="pill on" data-t="entree">↓ Entrée</button><button type="button" class="pill" data-t="sortie">↑ Sortie</button></div><div class="field"><label>Quantité ('+esc(s.unite)+')</label><input type="number" name="qte"/></div><div class="field"><label>Note (optionnel)</label><input name="note" placeholder="Bon n°, motif..."/></div>';
+  var m=openModal({title:"Mouvement · "+s.designation,body:body,footer:[{label:"Annuler",cls:"ghost"},{label:"Valider",onClick:function(ov){
+    var q=Number(val(ov,"qte")); if(!q||q<=0){ toast("Quantité invalide","err"); return false; }
+    var delta=type==="entree"?q:-q, nv=s.stock+delta;
+    if(nv<0){ toast("Stock insuffisant pour cette sortie","err"); return false; }
+    s.stock=nv; DB.mouvements.unshift({id:uid(),date:todayISO(),ref:s.ref,article:s.designation,type:type,qte:q,note:val(ov,"note"),stock_apres:nv});
+    save(); render(); toast((type==="entree"?"Entrée":"Sortie")+" de "+q+" "+s.unite+" enregistrée");
+  }}]});
+  Array.prototype.forEach.call(m.overlay.querySelectorAll("#mvtType [data-t]"),function(b){ b.onclick=function(){ type=b.getAttribute("data-t"); Array.prototype.forEach.call(m.overlay.querySelectorAll("#mvtType .pill"),function(x){x.classList.remove("on");}); b.classList.add("on"); }; });
+}
+
+/* ---- Recrutement ---- */
+var recSel=null;
+function viewRecrut(){
+  var postes=DB.postes.map(function(p){return p.intitule;});
+  if(postes.length===0) return emptyBox("◉","Aucun poste défini","Créez d'abord des fiches de poste pour lancer un recrutement.");
+  if(!recSel||postes.indexOf(recSel)<0) recSel=postes[0];
+  var rec=DB.recrutement[recSel]||{stage:"besoin"};
+  var curIdx=STAGES.map(function(s){return s.k;}).indexOf(rec.stage);
+  var cands=DB.candidats.filter(function(c){return c.poste===recSel;});
+  var html='<div class="field no-print" style="max-width:360px"><label>Poste à recruter</label><select id="recSel">'+postes.map(function(p){return '<option'+(p===recSel?" selected":"")+'>'+esc(p)+'</option>';}).join("")+'</select></div>';
+  html+='<div class="card p"><div class="sec-title first"><h3>Avancement du recrutement</h3></div><div class="pipe">';
+  STAGES.forEach(function(s,i){ html+='<div class="stage" style="border-color:'+(i===curIdx?s.c:"var(--line)")+';border-width:'+(i===curIdx?2:1)+'px"><h4>'+s.l+' '+(i<=curIdx?'<span style="color:'+s.c+'">●</span>':'')+'</h4><button class="btn '+(i===curIdx?"":"ghost")+' sm" style="width:100%" data-stage="'+s.k+'">'+(i===curIdx?"Étape actuelle":i<curIdx?"Revenir":"Passer ici")+'</button></div>'; });
+  html+='</div></div><div class="sec-title"><h3>Candidats ('+cands.length+')</h3><button class="btn no-print" id="addCand">+ Candidat</button></div>';
+  if(cands.length===0) html+=emptyBox("◉","Aucun candidat","Ajoutez les candidats pour ce poste.");
+  else{
+    html+='<div class="card tbl-wrap"><table><thead><tr><th>Nom</th><th>Contact</th><th>Statut</th><th class="no-print"></th></tr></thead><tbody>';
+    var statuts=["À évaluer","Présélectionné","Entretien planifié","Retenu","Écarté"];
+    cands.forEach(function(c){ html+='<tr><td><b>'+esc(c.nom)+'</b></td><td class="muted">'+esc(c.contact||"—")+'</td><td><select data-cstat="'+c.id+'" style="padding:5px 8px;border-radius:6px;border:1px solid var(--line)">'+statuts.map(function(s){return '<option'+(c.statut===s?" selected":"")+'>'+s+'</option>';}).join("")+'</select></td><td class="no-print"><button class="btn danger sm" data-cdel="'+c.id+'">✕</button></td></tr>'; });
+    html+='</tbody></table></div>';
+  }
+  return html;
+}
+function bindRecrut(){
+  var sel=document.getElementById("recSel"); if(sel) sel.onchange=function(){ recSel=sel.value; render(); };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-stage]"),function(b){ b.onclick=function(){ var st=b.getAttribute("data-stage"); DB.recrutement[recSel]=Object.assign(DB.recrutement[recSel]||{},{stage:st}); save(); render(); toast("Étape mise à jour : "+STAGES.filter(function(s){return s.k===st;})[0].l); }; });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cstat]"),function(b){ b.onchange=function(){ var id=b.getAttribute("data-cstat"); DB.candidats=DB.candidats.map(function(c){return c.id===id?Object.assign(c,{statut:b.value}):c;}); save(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cdel]"),function(b){ b.onclick=function(){ DB.candidats=DB.candidats.filter(function(c){return c.id!==b.getAttribute("data-cdel");}); save(); render(); toast("Candidat retiré","info"); }; });
+  var ac=document.getElementById("addCand"); if(ac) ac.onclick=function(){
+    openModal({title:"Nouveau candidat",body:'<div class="field"><label>Nom complet *</label><input name="nom"/></div><div class="field"><label>Contact (tél / email)</label><input name="contact"/></div>',
+      footer:[{label:"Annuler",cls:"ghost"},{label:"Ajouter",onClick:function(ov){ var n=val(ov,"nom").trim(); if(!n){toast("Le nom est obligatoire","err");return false;} DB.candidats.push({id:uid(),poste:recSel,nom:n,contact:val(ov,"contact"),statut:"À évaluer"}); save(); render(); toast("Candidat ajouté"); }}]});
+  };
+}
+
+/* ---- Reports ---- */
+function reportMailHref(r){
+  var nl="%0D%0A";
+  var body="RAPPORT HEBDOMADAIRE — Semaine "+r.semaine+nl+"(généré le "+r.horodatage+")"+nl+nl+
+    "1. PRODUCTION RÉALISÉE"+nl+encodeURIComponent(r.production||"—")+nl+nl+
+    "2. STOCKS"+nl+encodeURIComponent(r.stocks||"—")+nl+nl+
+    "3. INCIDENTS / BLOCAGES"+nl+encodeURIComponent(r.incidents||"—")+nl+nl+
+    "4. RECRUTEMENT"+nl+encodeURIComponent(r.recrutement||"—")+nl+nl+
+    "5. NOTES"+nl+encodeURIComponent(r.notes||"—");
+  return "mailto:?subject="+encodeURIComponent("Rapport hebdomadaire — Semaine "+r.semaine)+"&body="+body;
+}
+function viewReport(){
+  var html='<div class="sec-title first no-print"><h3>'+DB.reports.length+' rapport(s)</h3><button class="btn" id="addReport">+ Nouveau rapport</button></div>';
+  if(DB.reports.length===0) return html+emptyBox("❋","Aucun rapport","Rédigez le premier bilan hebdomadaire.");
+  html+='<div class="grid g2">';
+  DB.reports.slice().reverse().forEach(function(r){ var prev=esc((r.production||r.notes||"—")).slice(0,120);
+    html+='<div class="card p"><div style="display:flex;justify-content:space-between;align-items:center"><div><h3 style="font-size:15px">Semaine '+esc(r.semaine)+'</h3><div class="muted" style="font-size:11.5px;margin-top:3px">'+esc(r.horodatage)+'</div></div>'+
+      '<div class="no-print" style="display:flex;gap:6px"><button class="btn ghost sm" data-view="'+r.id+'">Voir</button><button class="btn dark sm" data-mail="'+r.id+'">✉</button><button class="btn danger sm" data-del="'+r.id+'">✕</button></div></div>'+
+      '<div class="muted" style="margin-top:10px;font-size:12.5px">'+prev+'</div></div>';
+  });
+  return html+'</div>';
+}
+function reportForm(r){ r=r||{}; function ta(n,l){ return '<div class="field"><label>'+l+'</label><textarea name="'+n+'">'+esc(r[n]||"")+'</textarea></div>'; }
+  return '<div class="field" style="max-width:200px"><label>Semaine ISO</label><input name="semaine" value="'+esc(r.semaine||isoWeek())+'"/></div>'+ta("production","Production réalisée")+ta("stocks","Stocks")+ta("incidents","Incidents / blocages")+ta("recrutement","Recrutement")+ta("notes","Notes"); }
+function bindReport(){
+  var a=document.getElementById("addReport"); if(a) a.onclick=function(){ editReport(null); };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-view]"),function(b){ b.onclick=function(){ viewReportModal(b.getAttribute("data-view")); }; });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-mail]"),function(b){ b.onclick=function(){ var r=DB.reports.filter(function(x){return x.id===b.getAttribute("data-mail");})[0]; window.location.href=reportMailHref(r); toast("Ouverture de votre messagerie...","info"); }; });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-del]"),function(b){ b.onclick=function(){ if(confirm("Supprimer ce rapport ?")){ DB.reports=DB.reports.filter(function(x){return x.id!==b.getAttribute("data-del");}); save(); render(); toast("Rapport supprimé","info"); } }; });
+}
+function editReport(id){ var r=id?DB.reports.filter(function(x){return x.id===id;})[0]:null;
+  openModal({wide:true,title:"Rapport hebdomadaire",body:reportForm(r),footer:[{label:"Annuler",cls:"ghost"},{label:"Enregistrer",onClick:function(ov){
+    var d={semaine:val(ov,"semaine").trim(),production:val(ov,"production"),stocks:val(ov,"stocks"),incidents:val(ov,"incidents"),recrutement:val(ov,"recrutement"),notes:val(ov,"notes"),horodatage:new Date().toLocaleString("fr-FR")};
+    if(!d.semaine){ toast("La semaine est obligatoire","err"); return false; }
+    var ex=DB.reports.filter(function(x){return x.semaine===d.semaine;})[0];
+    if(ex){ Object.assign(ex,d); } else { d.id=uid(); DB.reports.push(d); }
+    save(); render(); toast("Rapport enregistré");
+  }}]});
+}
+function viewReportModal(id){ var r=DB.reports.filter(function(x){return x.id===id;})[0]; if(!r) return;
+  var rows=[["Production réalisée",r.production],["Stocks",r.stocks],["Incidents / blocages",r.incidents],["Recrutement",r.recrutement],["Notes",r.notes]];
+  var body='<div class="muted" style="margin-bottom:14px">Horodatage : '+esc(r.horodatage)+'</div>'+rows.map(function(x){ return '<div style="margin-bottom:14px"><h4 style="font-size:13px;color:var(--amber-d);margin-bottom:4px">'+x[0]+'</h4><div style="white-space:pre-wrap">'+esc(x[1]||"—")+'</div></div>'; }).join("");
+  openModal({wide:true,title:"Rapport — Semaine "+r.semaine,body:body,footer:[{label:"🖨 Imprimer",cls:"ghost",onClick:function(){ window.print(); return false; }},{label:"✉ Envoyer par mail",cls:"dark",onClick:function(){ window.location.href=reportMailHref(r); return false; }},{label:"Fermer"}]});
+}
+
+/* ---- Production ---- */
+function viewProd(){
+  var html='<div class="sec-title first no-print"><h3>'+DB.production.length+' saisie(s)</h3><button class="btn" id="addProd">+ Saisir la production</button></div>';
+  if(DB.production.length===0) return html+emptyBox("▲","Aucune saisie de production","Enregistrez la production du jour.");
+  html+='<div class="card tbl-wrap"><table><thead><tr><th>Date</th><th>Produit / ligne</th><th>Objectif</th><th>Réalisé</th><th>Écart</th><th>Blocages</th><th class="no-print"></th></tr></thead><tbody>';
+  DB.production.forEach(function(p){ var ec=p.realise-p.objectif, pct=p.objectif?Math.round(p.realise/p.objectif*100):0; var cls=pct>=100?"b-green":pct>=85?"b-amber":"b-red";
+    html+='<tr><td class="muted">'+p.date+'</td><td><b>'+esc(p.ligne)+'</b></td><td>'+p.objectif+'</td><td>'+p.realise+'</td><td><span class="badge '+cls+'">'+(ec>=0?"+":"")+ec+' · '+pct+'%</span></td><td class="muted" style="max-width:200px">'+esc(p.blocages||"—")+'</td><td class="no-print"><button class="btn ghost sm" data-edit="'+p.id+'">✎</button> <button class="btn danger sm" data-del="'+p.id+'">✕</button></td></tr>';
+  });
+  return html+'</tbody></table></div>';
+}
+function prodForm(p){ p=p||{date:todayISO()}; return '<div class="frow"><div class="field"><label>Date</label><input type="date" name="date" value="'+esc(p.date||todayISO())+'"/></div><div class="field"><label>Produit / ligne *</label><input name="ligne" value="'+esc(p.ligne||"")+'"/></div></div><div class="frow"><div class="field"><label>Objectif</label><input type="number" name="objectif" value="'+(p.objectif!=null?p.objectif:"")+'"/></div><div class="field"><label>Réalisé</label><input type="number" name="realise" value="'+(p.realise!=null?p.realise:"")+'"/></div></div><div class="field"><label>Blocages / observations</label><textarea name="blocages">'+esc(p.blocages||"")+'</textarea></div>'; }
+function bindProd(){
+  var a=document.getElementById("addProd"); if(a) a.onclick=function(){ editProd(null); };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-edit]"),function(b){ b.onclick=function(){ editProd(b.getAttribute("data-edit")); }; });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-del]"),function(b){ b.onclick=function(){ if(confirm("Supprimer cette saisie ?")){ DB.production=DB.production.filter(function(x){return x.id!==b.getAttribute("data-del");}); save(); render(); toast("Saisie supprimée","info"); } }; });
+}
+function editProd(id){ var p=id?DB.production.filter(function(x){return x.id===id;})[0]:null;
+  openModal({title:"Saisie de production",body:prodForm(p),footer:[{label:"Annuler",cls:"ghost"},{label:"Enregistrer",onClick:function(ov){
+    var d={date:val(ov,"date")||todayISO(),ligne:val(ov,"ligne").trim(),objectif:Number(val(ov,"objectif")||0),realise:Number(val(ov,"realise")||0),blocages:val(ov,"blocages")};
+    if(!d.ligne){ toast("Le produit/ligne est obligatoire","err"); return false; }
+    if(id){ DB.production=DB.production.map(function(x){return x.id===id?Object.assign(x,d):x;}); } else { d.id=uid(); DB.production.unshift(d); }
+    save(); render(); toast("Saisie enregistrée");
+  }}]});
+}
+
+/* ---- RH ---- */
+function viewRH(){
+  var day=todayISO();
+  var present=DB.employes.filter(function(e){return e.presence[day]==="present";}).length;
+  var absent=DB.employes.filter(function(e){return e.presence[day]==="absent";}).length;
+  var conge=DB.employes.filter(function(e){return e.presence[day]==="congé";}).length;
+  function st(lab,val,color){ return '<div class="card stat"><div class="lab">'+lab+'</div><div class="val" style="color:'+(color||"var(--ink)")+'">'+val+'</div></div>'; }
+  var html='<div class="grid g4" style="margin-bottom:16px">'+st("Effectif",DB.employes.length)+st("Présents",present,"var(--green)")+st("Absents",absent,"var(--red)")+st("En congé",conge,"var(--blue)")+'</div>';
+  html+='<div class="sec-title first no-print"><h3>Personnel · pointage du '+day+'</h3><button class="btn" id="addEmp">+ Employé</button></div>';
+  if(DB.employes.length===0) return html+emptyBox("◈","Aucun employé","Ajoutez le personnel de l'usine.");
+  html+='<div class="card tbl-wrap"><table><thead><tr><th>Nom</th><th>Poste</th><th>Présence du jour</th><th>Absences cumulées</th><th class="no-print"></th></tr></thead><tbody>';
+  DB.employes.forEach(function(e){ var s=e.presence[day]||"";
+    var btns=[["present","Présent"],["absent","Absent"],["congé","Congé"]].map(function(x){ return '<button class="pill'+(s===x[0]?" on":"")+'" style="padding:5px 10px;font-size:12px" data-pres="'+e.id+'" data-st="'+x[0]+'">'+x[1]+'</button>'; }).join(" ");
+    html+='<tr><td><b>'+esc(e.nom)+'</b></td><td class="muted">'+esc(e.poste)+'</td><td class="no-print"><div style="display:flex;gap:6px">'+btns+'</div></td><td><span class="badge '+(e.absences>0?"b-amber":"b-gray")+'">'+e.absences+'</span></td><td class="no-print"><button class="btn danger sm" data-del="'+e.id+'">✕</button></td></tr>';
+  });
+  return html+'</tbody></table></div>';
+}
+function bindRH(){
+  var day=todayISO();
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pres]"),function(b){ b.onclick=function(){ var id=b.getAttribute("data-pres"), st=b.getAttribute("data-st");
+    DB.employes=DB.employes.map(function(e){ if(e.id!==id) return e; var prev=e.presence[day]; e.presence[day]=st; if(st==="absent"&&prev!=="absent") e.absences++; if(prev==="absent"&&st!=="absent") e.absences=Math.max(0,e.absences-1); return e; });
+    save(); render(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-del]"),function(b){ b.onclick=function(){ if(confirm("Retirer cet employé ?")){ DB.employes=DB.employes.filter(function(x){return x.id!==b.getAttribute("data-del");}); save(); render(); toast("Employé retiré","info"); } }; });
+  var a=document.getElementById("addEmp"); if(a) a.onclick=function(){
+    var opts=DB.postes.map(function(p){return '<option>'+esc(p.intitule)+'</option>';}).join("")||'<option value="">—</option>';
+    openModal({title:"Nouvel employé",body:'<div class="field"><label>Nom complet *</label><input name="nom"/></div><div class="field"><label>Poste</label><select name="poste">'+opts+'</select></div>',
+      footer:[{label:"Annuler",cls:"ghost"},{label:"Ajouter",onClick:function(ov){ var n=val(ov,"nom").trim(); if(!n){toast("Le nom est obligatoire","err");return false;} DB.employes.push({id:uid(),nom:n,poste:val(ov,"poste"),presence:{},absences:0}); save(); render(); toast("Employé ajouté"); }}]});
+  };
+}
+
+/* ============ Excel export (SpreadsheetML, no library) ============ */
+function xmlEsc(v){ return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c];}); }
+function sheetXml(name,rows){
+  if(!rows||!rows.length) rows=[{info:"Aucune donnée"}];
+  var cols=Object.keys(rows[0]);
+  function cell(v){ var num=(typeof v==="number"); return '<Cell><Data ss:Type="'+(num?"Number":"String")+'">'+xmlEsc(v)+'</Data></Cell>'; }
+  var head='<Row>'+cols.map(function(c){return cell(c);}).join("")+'</Row>';
+  var body=rows.map(function(r){ return '<Row>'+cols.map(function(c){return cell(r[c]);}).join("")+'</Row>'; }).join("");
+  return '<Worksheet ss:Name="'+xmlEsc(name).slice(0,31)+'"><Table>'+head+body+'</Table></Worksheet>';
+}
+function exportExcel(){
+  var sheets=[];
+  sheets.push(sheetXml("Postes",DB.postes.map(function(p){return {intitule:p.intitule,rattachement:p.rattach,mission:p.mission,activites:p.activites,competences:p.competences,diplome:p.diplome,horaires:p.horaires,kpi:p.kpi};})));
+  sheets.push(sheetXml("Stocks",DB.stocks.map(function(s){return {ref:s.ref,designation:s.designation,unite:s.unite,stock:s.stock,seuil:s.seuil,fournisseur:s.fournisseur,alerte:s.stock<s.seuil?"OUI":"non"};})));
+  sheets.push(sheetXml("Mouvements",DB.mouvements.map(function(m){return {date:m.date,article:m.article,type:m.type,qte:m.qte,stock_apres:m.stock_apres,note:m.note};})));
+  sheets.push(sheetXml("Candidats",DB.candidats.map(function(c){return {poste:c.poste,nom:c.nom,contact:c.contact,statut:c.statut};})));
+  sheets.push(sheetXml("Reports",DB.reports.map(function(r){return {semaine:r.semaine,horodatage:r.horodatage,production:r.production,stocks:r.stocks,incidents:r.incidents,recrutement:r.recrutement,notes:r.notes};})));
+  sheets.push(sheetXml("Production",DB.production.map(function(p){return {date:p.date,ligne:p.ligne,objectif:p.objectif,realise:p.realise,ecart:p.realise-p.objectif,blocages:p.blocages};})));
+  sheets.push(sheetXml("Employes",DB.employes.map(function(e){return {nom:e.nom,poste:e.poste,absences:e.absences,presence_du_jour:e.presence[todayISO()]||"—"};})));
+  var xml='<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+sheets.join("")+'</Workbook>';
+  var blob=new Blob([xml],{type:"application/vnd.ms-excel"});
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="base_usine_"+todayISO()+".xls";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  toast("Base exportée en Excel (.xls)");
+}
+
+/* ============ Wiring ============ */
+document.getElementById("nav").addEventListener("click",function(e){ var b=e.target.closest("[data-tab]"); if(b){ setTab(b.getAttribute("data-tab")); document.getElementById("side").classList.remove("open"); } });
+document.getElementById("burger").onclick=function(){ document.getElementById("side").classList.toggle("open"); };
+document.getElementById("print").onclick=function(){ window.print(); };
+document.getElementById("excel").onclick=exportExcel;
+render();
+</script>
+</body>
+</html>
