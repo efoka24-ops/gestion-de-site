@@ -169,13 +169,100 @@ export default function Reporting({ rapports, data, onChange }: Props) {
     const achatsByUnite: Record<string, number> = {};
     achats.forEach(a => { achatsByUnite[a.unite] = (achatsByUnite[a.unite] || 0) + a.montantTotal; });
 
-    return { prods, achats, prodByUnite, prodByMachine, totalProdObj, totalProdReal, totalPertes, rendement, alertesStock, dlcAlerts, totalAchats, achatsByUnite, getStockTotal };
+    // RH - présences sur la période
+    const presStats = { present: 0, absent: 0, conge: 0, total: 0 };
+    const datesList: string[] = [];
+    if (autoPeriod === 'jour') {
+      datesList.push(autoDate);
+    } else if (autoPeriod === 'semaine') {
+      const d = new Date(autoDate);
+      const dow = d.getDay() || 7;
+      const start = new Date(d); start.setDate(d.getDate() - dow + 1);
+      for (let i = 0; i < 6; i++) { const dd = new Date(start); dd.setDate(start.getDate() + i); datesList.push(dd.toISOString().slice(0, 10)); }
+    } else {
+      const month = autoDate.slice(0, 7);
+      for (let day = 1; day <= 31; day++) { const dd = `${month}-${String(day).padStart(2, '0')}`; datesList.push(dd); }
+    }
+    data.employes.forEach(e => {
+      datesList.forEach(d => {
+        const p = e.presences[d];
+        if (p === 'present') presStats.present++;
+        else if (p === 'absent') presStats.absent++;
+        else if (p === 'conge') presStats.conge++;
+        presStats.total++;
+      });
+    });
+    const tauxPresence = presStats.total > 0 ? Math.round((presStats.present / presStats.total) * 100) : 0;
+
+    // Stock par catégorie
+    const stockByCategorie: Record<string, { total: number; alertes: number; articles: number }> = {};
+    data.stocks.forEach(s => {
+      if (!stockByCategorie[s.categorie]) stockByCategorie[s.categorie] = { total: 0, alertes: 0, articles: 0 };
+      const qty = getStockTotal(s.id);
+      stockByCategorie[s.categorie].total += qty;
+      stockByCategorie[s.categorie].articles++;
+      if (qty <= s.seuilAlerte) stockByCategorie[s.categorie].alertes++;
+    });
+
+    return { prods, achats, prodByUnite, prodByMachine, totalProdObj, totalProdReal, totalPertes, rendement, alertesStock, dlcAlerts, totalAchats, achatsByUnite, getStockTotal, presStats, tauxPresence, stockByCategorie, datesList };
   }, [data, autoPeriod, autoDate]);
 
   const periodLabels: Record<string, string> = { jour: 'Journalier', semaine: 'Hebdomadaire', mois: 'Mensuel' };
   const formatMontant = (n: number) => n.toLocaleString('fr-FR');
 
   const toggleSection = (key: keyof typeof exportSections) => setExportSections(s => ({ ...s, [key]: !s[key] }));
+
+  // --- Auto-generate and save report ---
+  const genererRapportAuto = () => {
+    const s = autoStats;
+    const lignes = Object.entries(s.prodByUnite).map(([u, d]) => ({
+      ligne: u === 'arachide' ? 'Arachides' : 'Farine de plantain',
+      objectif: String(d.obj), realise: String(d.real),
+      ecart: String(d.real - d.obj),
+      tauxPerte: d.real > 0 ? `${((d.pertes / (d.real + d.pertes)) * 100).toFixed(1)}%` : '0%',
+    }));
+    const stocksCat = Object.entries(s.stockByCategorie).map(([cat, d]) => ({
+      categorie: cat, niveau: `${d.total} (${d.articles} articles)`,
+      statut: d.alertes > 0 ? `⚠ ${d.alertes} alerte(s)` : '✅ OK',
+    }));
+    const type: ReportType = autoPeriod === 'jour' ? 'hebdo_operationnel' : autoPeriod === 'semaine' ? 'hebdo_operationnel' : 'synthese_mensuelle';
+
+    const rapport: RapportHebdo = {
+      id: generateId(), type,
+      semaineISO: autoPeriod === 'semaine' ? getISOWeek(new Date(autoDate)) : autoDate.slice(0, 7),
+      dateCreation: new Date().toISOString(),
+      periode: autoPeriod === 'jour' ? autoDate : autoPeriod === 'semaine' ? `Semaine du ${s.datesList[0]} au ${s.datesList[s.datesList.length - 1]}` : `Mois ${autoDate.slice(0, 7)}`,
+      redigePar: 'Généré automatiquement',
+      dateTransmission: new Date().toISOString().slice(0, 10),
+      productionTotale: String(s.totalProdReal),
+      tauxPerteMoyen: s.totalProdReal > 0 ? `${((s.totalPertes / (s.totalProdReal + s.totalPertes)) * 100).toFixed(1)}%` : '0%',
+      nonConformitesOuvertes: String(s.alertesStock.length),
+      effectifsPresents: `${s.presStats.present} présences / ${s.presStats.absent} absences / ${s.presStats.conge} congés (taux: ${s.tauxPresence}%)`,
+      lignes,
+      stocksCategories: stocksCat,
+      incidentsQualite: s.dlcAlerts.length > 0 ? `${s.dlcAlerts.length} lot(s) à DLC proche nécessitant écoulement prioritaire FEFO` : 'Aucun incident',
+      effectifPrevu: String(data.employes.length * s.datesList.length),
+      effectifPresent: String(s.presStats.present),
+      absences: String(s.presStats.absent),
+      coutUnitArachides: s.achatsByUnite['arachide'] ? `${formatMontant(s.achatsByUnite['arachide'])} FCFA` : '—',
+      coutUnitPlantain: s.achatsByUnite['plantain'] ? `${formatMontant(s.achatsByUnite['plantain'])} FCFA` : '—',
+      variationVsMois: '—',
+      // Synthèse mensuelle
+      syntheseProduction: `Production totale: ${s.totalProdReal} unités sur ${s.prods.length} saisies. Rendement global: ${s.rendement}%. Pertes: ${s.totalPertes}.`,
+      coutRevientParLigne: Object.entries(s.prodByUnite).map(([u, d]) => `${u === 'arachide' ? 'Arachide' : 'Plantain'}: ${d.real} réalisé / ${d.obj} objectif`).join('. '),
+      rentabilite: `Dépenses totales période: ${formatMontant(s.totalAchats)} FCFA`,
+      // Financier
+      tresorerie: `Total dépenses: ${formatMontant(s.totalAchats)} FCFA`,
+      coutsVsBudget: Object.entries(s.achatsByUnite).map(([u, t]) => `${u}: ${formatMontant(t)} FCFA`).join(', '),
+      // RH
+      effectifsTotal: String(data.employes.length),
+      absenteisme: `${s.presStats.absent} absence(s) — taux présence ${s.tauxPresence}%`,
+      notes: `Rapport généré automatiquement le ${new Date().toLocaleDateString('fr-FR')} — ${periodLabels[autoPeriod]}`,
+    };
+
+    onChange([...rapports, rapport]);
+    toast(`Rapport ${periodLabels[autoPeriod].toLowerCase()} généré et sauvegardé ✓`);
+  };
 
   // --- SVG bar chart builder ---
   const buildBarChartSVG = (items: { label: string; value: number; color: string }[], title: string, w = 500, h = 220) => {
@@ -462,7 +549,6 @@ export default function Reporting({ rapports, data, onChange }: Props) {
             </div>
             <input type="date" value={autoDate} onChange={e => setAutoDate(e.target.value)} className="border rounded-lg px-3 py-2 text-sm" />
             <span className="text-sm text-slate-500">Reporting {periodLabels[autoPeriod].toLowerCase()} — {autoPeriod === 'jour' ? autoDate : autoPeriod === 'semaine' ? `Semaine du ${autoDate}` : autoDate.slice(0, 7)}</span>
-            <button onClick={() => setShowExportOptions(!showExportOptions)} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium ml-auto">⬇ Exporter</button>
           </div>
 
           {/* Export options panel */}
@@ -603,6 +689,28 @@ export default function Reporting({ rapports, data, onChange }: Props) {
               <AutoCard label="Nb commandes" value={autoStats.achats.length} />
             </div>
             {autoStats.achats.length === 0 && <p className="text-slate-400 text-sm">Aucun achat sur cette période.</p>}
+          </div>
+
+          {/* RH Summary */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-700 mb-4">👥 Ressources humaines — {periodLabels[autoPeriod]}</h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <AutoCard label="Effectif" value={data.employes.length} />
+              <AutoCard label="Présences" value={autoStats.presStats.present} color="green" />
+              <AutoCard label="Absences" value={autoStats.presStats.absent} color={autoStats.presStats.absent > 0 ? 'red' : 'green'} />
+              <AutoCard label="Congés" value={autoStats.presStats.conge} color="blue" />
+              <AutoCard label="Taux présence" value={`${autoStats.tauxPresence}%`} color={autoStats.tauxPresence >= 80 ? 'green' : 'amber'} />
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-3 flex-wrap">
+            <button onClick={genererRapportAuto} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-sm font-medium shadow-sm">
+              ✅ Générer et sauvegarder le rapport {periodLabels[autoPeriod].toLowerCase()}
+            </button>
+            <button onClick={() => setShowExportOptions(!showExportOptions)} className="bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-xl text-sm font-medium shadow-sm">
+              ⬇ Exporter PDF / Excel
+            </button>
           </div>
         </div>
       )}
