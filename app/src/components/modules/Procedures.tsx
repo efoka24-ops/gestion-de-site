@@ -16,12 +16,75 @@ const TYPE_LABELS: Record<string, { label: string; icon: string }> = {
   autre: { label: 'Autre', icon: '📋' },
 };
 
+const DEFAULT_CHECKLISTS: Record<string, { nom: string; items: string[] }> = {
+  entree: {
+    nom: 'Réception des matières premières',
+    items: [
+      'Vérifier le bon de livraison vs commande',
+      "Contrôler l'état des emballages",
+      'Vérifier les dates de péremption',
+      'Peser / compter les quantités reçues',
+      'Prélever un échantillon pour le contrôle qualité',
+      'Enregistrer la réception dans le stock',
+      'Ranger selon la règle FIFO',
+    ],
+  },
+  controle: {
+    nom: 'Contrôle qualité',
+    items: [
+      'Prélever les échantillons du lot',
+      'Contrôle visuel (aspect, corps étrangers)',
+      'Mesures physico-chimiques (pH, humidité...)',
+      "Vérifier l'étiquetage et la traçabilité",
+      'Enregistrer les résultats',
+      'Statuer : conforme / non conforme',
+      'Bloquer et isoler les lots non conformes',
+    ],
+  },
+  sortie: {
+    nom: 'Sortie des produits finis',
+    items: [
+      'Vérifier le bon de commande client',
+      'Contrôler la conformité des produits finis',
+      'Vérifier les quantités et les dates',
+      'Enregistrer la sortie dans le stock',
+      'Éditer le bon de livraison',
+      'Charger et vérifier le transport',
+    ],
+  },
+  autre: {
+    nom: '',
+    items: [],
+  },
+};
+
 export default function Procedures({ procedures, onChange }: Props) {
   const { toast } = useToast();
   const today = new Date().toISOString().slice(0, 10);
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ nom: '', type: 'entree' as Procedure['type'], creePar: '', items: '' });
+  const [newForm, setNewForm] = useState({ nom: DEFAULT_CHECKLISTS.entree.nom, type: 'entree' as Procedure['type'], creePar: '' });
+  const [newItems, setNewItems] = useState<{ label: string; selected: boolean }[]>(
+    DEFAULT_CHECKLISTS.entree.items.map(label => ({ label, selected: true }))
+  );
+  const [customItem, setCustomItem] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const changeType = (type: Procedure['type']) => {
+    const defaults = DEFAULT_CHECKLISTS[type];
+    setNewForm(f => ({ ...f, type, nom: defaults.nom || f.nom }));
+    setNewItems(defaults.items.map(label => ({ label, selected: true })));
+    setCustomItem('');
+  };
+
+  const toggleNewItem = (idx: number) => {
+    setNewItems(items => items.map((item, i) => i === idx ? { ...item, selected: !item.selected } : item));
+  };
+
+  const addCustomItem = () => {
+    if (!customItem.trim()) return;
+    setNewItems(items => [...items, { label: customItem.trim(), selected: true }]);
+    setCustomItem('');
+  };
 
   const toggleItem = (procId: string, itemId: string) => {
     const updated = procedures.map(p => {
@@ -32,16 +95,18 @@ export default function Procedures({ procedures, onChange }: Props) {
   };
 
   const addProcedure = () => {
-    if (!newForm.nom || !newForm.items.trim()) { toast('Nom et étapes obligatoires', 'error'); return; }
-    const items: ProcedureItem[] = newForm.items.split('\n').filter(l => l.trim()).map((label, i) => ({
-      id: generateId() + i, label: label.trim(), checked: false,
+    const selectedItems = newItems.filter(i => i.selected);
+    if (!newForm.nom || selectedItems.length === 0) { toast('Nom et au moins une étape obligatoires', 'error'); return; }
+    const items: ProcedureItem[] = selectedItems.map((item, i) => ({
+      id: generateId() + i, label: item.label, checked: false,
     }));
     const proc: Procedure = {
       id: generateId(), nom: newForm.nom, date: today, type: newForm.type,
       creePar: newForm.creePar || 'Chef de site', items, statut: 'en_cours', notes: '',
     };
     onChange([...procedures, proc]);
-    setNewForm({ nom: '', type: 'entree', creePar: '', items: '' });
+    setNewForm({ nom: DEFAULT_CHECKLISTS.entree.nom, type: 'entree', creePar: '' });
+    setNewItems(DEFAULT_CHECKLISTS.entree.items.map(label => ({ label, selected: true })));
     setShowNew(false);
     toast('Procédure créée');
   };
@@ -156,14 +221,35 @@ export default function Procedures({ procedures, onChange }: Props) {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
             <div><label className="text-xs text-slate-500">Nom de la procédure</label><input value={newForm.nom} onChange={e => setNewForm({ ...newForm, nom: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ex: Réception arachides" /></div>
             <div><label className="text-xs text-slate-500">Type</label>
-              <select value={newForm.type} onChange={e => setNewForm({ ...newForm, type: e.target.value as Procedure['type'] })} className="w-full border rounded-lg px-3 py-2 text-sm">
+              <select value={newForm.type} onChange={e => changeType(e.target.value as Procedure['type'])} className="w-full border rounded-lg px-3 py-2 text-sm">
                 {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
               </select>
             </div>
             <div><label className="text-xs text-slate-500">Créé par</label><input value={newForm.creePar} onChange={e => setNewForm({ ...newForm, creePar: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Chef de site" /></div>
           </div>
-          <div><label className="text-xs text-slate-500">Étapes de la checklist (une par ligne)</label>
-            <textarea rows={5} value={newForm.items} onChange={e => setNewForm({ ...newForm, items: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Vérifier le bon de livraison&#10;Contrôler la température&#10;Peser les marchandises&#10;..." />
+
+          {/* Checklist items with checkboxes */}
+          <div className="mb-3">
+            <label className="text-xs text-slate-500 mb-2 block">Étapes à inclure <span className="text-slate-400">(décochez celles à retirer, ajoutez des personnalisées)</span></label>
+            <div className="space-y-1.5 bg-slate-50 rounded-lg p-3 max-h-64 overflow-y-auto">
+              {newItems.map((item, i) => (
+                <label key={i} className="flex items-center gap-3 cursor-pointer group">
+                  <input type="checkbox" checked={item.selected} onChange={() => toggleNewItem(i)}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400" />
+                  <span className={`text-sm ${item.selected ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{item.label}</span>
+                  {i >= (DEFAULT_CHECKLISTS[newForm.type]?.items.length || 0) && (
+                    <button onClick={() => setNewItems(items => items.filter((_, idx) => idx !== i))} className="text-xs text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 ml-auto">✕</button>
+                  )}
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-2">
+              <input placeholder="Ajouter une étape personnalisée..." value={customItem} onChange={e => setCustomItem(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomItem(); } }}
+                className="flex-1 border rounded-lg px-3 py-2 text-sm" />
+              <button onClick={addCustomItem} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm">+ Ajouter</button>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">{newItems.filter(i => i.selected).length} étape(s) sélectionnée(s)</p>
           </div>
           <button onClick={addProcedure} className="mt-3 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg text-sm font-medium">Créer</button>
         </div>
