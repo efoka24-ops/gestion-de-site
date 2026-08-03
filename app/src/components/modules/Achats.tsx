@@ -16,7 +16,7 @@ export default function Achats({ achats, stocks, fournisseurs, onChange }: Props
   const today = new Date().toISOString().slice(0, 10);
   const [showForm, setShowForm] = useState(false);
   const [filterUnite, setFilterUnite] = useState<UniteProduction | 'commun' | 'all'>('all');
-  const [filterPeriod, setFilterPeriod] = useState<'jour' | 'semaine' | 'mois' | 'all'>('mois');
+  const [filterPeriod, setFilterPeriod] = useState<'jour' | 'semaine' | 'mois' | 'all'>('all');
   const [filterDate, setFilterDate] = useState(today);
   const [filterStatut, setFilterStatut] = useState<'all' | 'commande' | 'livre' | 'paye'>('all');
 
