@@ -20,9 +20,11 @@ interface SidebarProps {
   active: string;
   onNavigate: (id: string) => void;
   onExportExcel: () => void;
+  onExportJSON: () => void;
+  onImportJSON: (file: File) => void;
 }
 
-export default function Sidebar({ active, onNavigate, onExportExcel }: SidebarProps) {
+export default function Sidebar({ active, onNavigate, onExportExcel, onExportJSON, onImportJSON }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -73,6 +75,16 @@ export default function Sidebar({ active, onNavigate, onExportExcel }: SidebarPr
           >
             ⬇ Exporter Excel
           </button>
+          <button
+            onClick={onExportJSON}
+            className="w-full py-2 px-3 bg-blue-700 hover:bg-blue-600 rounded text-sm font-medium transition-colors"
+          >
+            💾 Sauvegarder (JSON)
+          </button>
+          <label className="block w-full py-2 px-3 bg-amber-700 hover:bg-amber-600 rounded text-sm font-medium transition-colors text-center cursor-pointer">
+            📂 Restaurer (JSON)
+            <input type="file" accept=".json" className="hidden" onChange={e => { if (e.target.files?.[0]) onImportJSON(e.target.files[0]); e.target.value = ''; }} />
+          </label>
           <button
             onClick={() => window.print()}
             className="w-full py-2 px-3 bg-slate-700 hover:bg-slate-600 rounded text-sm font-medium transition-colors"

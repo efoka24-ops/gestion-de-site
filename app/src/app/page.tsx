@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { AppData } from '@/lib/types';
-import { loadData, saveData, exportToExcel } from '@/lib/storage';
+import { loadData, saveData, exportToExcel, exportBackupJSON, importBackupJSON } from '@/lib/storage';
 import { ToastProvider, useToast } from '@/components/Toast';
 import Sidebar from '@/components/Sidebar';
 import Dashboard from '@/components/modules/Dashboard';
@@ -36,10 +36,19 @@ function AppContent() {
   if (!data) return <div className="flex items-center justify-center h-screen text-slate-400">Chargement...</div>;
 
   const handleExport = () => { exportToExcel(data); toast('Fichier Excel téléchargé'); };
+  const handleExportJSON = () => { exportBackupJSON(data); toast('Sauvegarde JSON téléchargée'); };
+  const handleImportJSON = async (file: File) => {
+    try {
+      const imported = await importBackupJSON(file);
+      setData(imported);
+      saveData(imported);
+      toast('Données restaurées avec succès !');
+    } catch { toast('Erreur: fichier invalide', 'error'); }
+  };
 
   return (
     <div className="flex h-screen bg-slate-50">
-      <Sidebar active={active} onNavigate={setActive} onExportExcel={handleExport} />
+      <Sidebar active={active} onNavigate={setActive} onExportExcel={handleExport} onExportJSON={handleExportJSON} onImportJSON={handleImportJSON} />
       <main className="flex-1 overflow-y-auto p-6 md:p-8">
         {active === 'dashboard' && <Dashboard data={data} onNavigate={setActive} />}
         {active === 'fiches' && <FichesPoste fiches={data.fichesPoste} onChange={f => update({ fichesPoste: f })} />}

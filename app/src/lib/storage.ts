@@ -20,6 +20,34 @@ export function loadData(): AppData {
 export function saveData(data: AppData): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  // Auto-backup: save timestamp of last modification
+  localStorage.setItem(STORAGE_KEY + '-lastmod', new Date().toISOString());
+}
+
+// --- Backup / Restore JSON ---
+export function exportBackupJSON(data: AppData): void {
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kafarm-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function importBackupJSON(file: File): Promise<AppData> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result as string) as Partial<AppData>;
+        resolve({ ...defaultData, ...parsed });
+      } catch { reject(new Error('Fichier JSON invalide')); }
+    };
+    reader.onerror = () => reject(new Error('Erreur de lecture'));
+    reader.readAsText(file);
+  });
 }
 
 export function getISOWeek(d: Date): string {
