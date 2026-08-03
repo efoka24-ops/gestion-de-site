@@ -29,6 +29,12 @@ export default function Reporting({ rapports, data, onChange }: Props) {
   const [tab, setTab] = useState<'auto' | 'manuel' | 'historique'>('auto');
   const [autoPeriod, setAutoPeriod] = useState<'jour' | 'semaine' | 'mois'>('jour');
   const [autoDate, setAutoDate] = useState(new Date().toISOString().slice(0, 10));
+  const [showExportOptions, setShowExportOptions] = useState(false);
+  const [exportSections, setExportSections] = useState({
+    production: true, productionUnite: true, productionMachine: true,
+    stocks: true, achats: true, achatsDetail: false,
+  });
+  const [exportFormat, setExportFormat] = useState<'tableaux' | 'graphes' | 'les_deux'>('les_deux');
   const currentWeek = getISOWeek(new Date());
 
   // Form state
@@ -169,6 +175,267 @@ export default function Reporting({ rapports, data, onChange }: Props) {
   const periodLabels: Record<string, string> = { jour: 'Journalier', semaine: 'Hebdomadaire', mois: 'Mensuel' };
   const formatMontant = (n: number) => n.toLocaleString('fr-FR');
 
+  const toggleSection = (key: keyof typeof exportSections) => setExportSections(s => ({ ...s, [key]: !s[key] }));
+
+  // --- SVG bar chart builder ---
+  const buildBarChartSVG = (items: { label: string; value: number; color: string }[], title: string, w = 500, h = 220) => {
+    if (items.length === 0) return '';
+    const max = Math.max(...items.map(i => i.value), 1);
+    const barW = Math.min(60, (w - 60) / items.length - 10);
+    const startX = 50;
+    const chartH = h - 50;
+    const bars = items.map((item, i) => {
+      const barH = Math.max(2, (item.value / max) * (chartH - 20));
+      const x = startX + i * (barW + 10);
+      const y = chartH - barH;
+      return `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="${item.color}" rx="3"/>
+        <text x="${x + barW / 2}" y="${y - 5}" text-anchor="middle" font-size="11" font-weight="bold" fill="#334155">${item.value}</text>
+        <text x="${x + barW / 2}" y="${chartH + 15}" text-anchor="middle" font-size="9" fill="#64748b">${item.label.length > 10 ? item.label.slice(0, 10) + '…' : item.label}</text>`;
+    }).join('');
+    return `<div style="text-align:center;margin:12px 0"><p style="font-weight:bold;font-size:13px;margin-bottom:4px">${title}</p>
+      <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+        <line x1="45" y1="0" x2="45" y2="${chartH}" stroke="#e2e8f0" stroke-width="1"/>
+        <line x1="45" y1="${chartH}" x2="${w}" y2="${chartH}" stroke="#e2e8f0" stroke-width="1"/>
+        ${bars}
+      </svg></div>`;
+  };
+
+  const buildPieChartSVG = (items: { label: string; value: number; color: string }[], title: string) => {
+    const total = items.reduce((s, i) => s + i.value, 0);
+    if (total === 0) return '';
+    const cx = 100, cy = 100, r = 80;
+    let cumAngle = -Math.PI / 2;
+    const slices = items.map(item => {
+      const angle = (item.value / total) * 2 * Math.PI;
+      const x1 = cx + r * Math.cos(cumAngle);
+      const y1 = cy + r * Math.sin(cumAngle);
+      cumAngle += angle;
+      const x2 = cx + r * Math.cos(cumAngle);
+      const y2 = cy + r * Math.sin(cumAngle);
+      const large = angle > Math.PI ? 1 : 0;
+      return `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z" fill="${item.color}"/>`;
+    }).join('');
+    const legend = items.map((item, i) => `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px;font-size:11px"><span style="width:12px;height:12px;background:${item.color};display:inline-block;border-radius:2px"></span>${item.label}: ${item.value} (${Math.round(item.value / total * 100)}%)</span>`).join('');
+    return `<div style="text-align:center;margin:12px 0"><p style="font-weight:bold;font-size:13px;margin-bottom:4px">${title}</p>
+      <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">${slices}</svg>
+      <div style="margin-top:4px">${legend}</div></div>`;
+  };
+
+  // --- Export to Excel (XML) ---
+  const exportAutoExcel = () => {
+    const s = autoStats;
+    const inclTables = exportFormat === 'tableaux' || exportFormat === 'les_deux';
+
+    let xml = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>';
+    xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
+
+    const escXml = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const cell = (v: string | number, type?: string) => `<Cell><Data ss:Type="${type || (typeof v === 'number' ? 'Number' : 'String')}">${escXml(String(v))}</Data></Cell>`;
+    const row = (cells: string[]) => `<Row>${cells.join('')}</Row>`;
+
+    if (exportSections.production && inclTables) {
+      xml += `<Worksheet ss:Name="Production"><Table>`;
+      xml += row(['Date', 'Unité', 'Produit', 'Machine', 'Objectif', 'Réalisé', 'Pertes', 'Rendement %'].map(h => cell(h)));
+      s.prods.forEach(p => {
+        const r = p.objectif > 0 ? Math.round((p.realise / p.objectif) * 100) : 0;
+        xml += row([cell(p.date), cell(p.unite), cell(p.produit), cell(p.machine || ''), cell(p.objectif, 'Number'), cell(p.realise, 'Number'), cell(p.pertes, 'Number'), cell(r, 'Number')]);
+      });
+      xml += row([cell('TOTAL'), cell(''), cell(''), cell(''), cell(s.totalProdObj, 'Number'), cell(s.totalProdReal, 'Number'), cell(s.totalPertes, 'Number'), cell(s.rendement, 'Number')]);
+      xml += '</Table></Worksheet>';
+    }
+
+    if (exportSections.productionUnite && inclTables) {
+      xml += `<Worksheet ss:Name="Production par unité"><Table>`;
+      xml += row(['Unité', 'Objectif', 'Réalisé', 'Pertes', 'Rendement %'].map(h => cell(h)));
+      Object.entries(s.prodByUnite).forEach(([u, d]) => {
+        const r = d.obj > 0 ? Math.round((d.real / d.obj) * 100) : 0;
+        xml += row([cell(u === 'arachide' ? 'Arachide' : 'Plantain'), cell(d.obj, 'Number'), cell(d.real, 'Number'), cell(d.pertes, 'Number'), cell(r, 'Number')]);
+      });
+      xml += '</Table></Worksheet>';
+    }
+
+    if (exportSections.productionMachine && inclTables) {
+      xml += `<Worksheet ss:Name="Production par machine"><Table>`;
+      xml += row(['Machine', 'Sessions', 'Objectif', 'Réalisé', 'Pertes', 'Rendement %'].map(h => cell(h)));
+      Object.entries(s.prodByMachine).forEach(([m, d]) => {
+        const r = d.obj > 0 ? Math.round((d.real / d.obj) * 100) : 0;
+        xml += row([cell(m), cell(d.count, 'Number'), cell(d.obj, 'Number'), cell(d.real, 'Number'), cell(d.pertes, 'Number'), cell(r, 'Number')]);
+      });
+      xml += '</Table></Worksheet>';
+    }
+
+    if (exportSections.stocks && inclTables) {
+      xml += `<Worksheet ss:Name="Stocks"><Table>`;
+      xml += row(['Référence', 'Désignation', 'Catégorie', 'Stock actuel', 'Seuil alerte', 'Statut'].map(h => cell(h)));
+      data.stocks.forEach(st => {
+        const total = s.getStockTotal(st.id);
+        xml += row([cell(st.reference), cell(st.designation), cell(st.categorie), cell(total, 'Number'), cell(st.seuilAlerte, 'Number'), cell(total <= st.seuilAlerte ? 'ALERTE' : 'OK')]);
+      });
+      xml += '</Table></Worksheet>';
+    }
+
+    if (exportSections.achats && inclTables) {
+      xml += `<Worksheet ss:Name="Achats"><Table>`;
+      xml += row(['Date', 'Fournisseur', 'Article', 'Unité', 'Quantité', 'Prix unitaire', 'Total', 'Statut'].map(h => cell(h)));
+      s.achats.forEach(a => {
+        const fourn = (data.fournisseurs || []).find(f => f.id === a.fournisseurId);
+        const art = data.stocks.find(st => st.id === a.articleId);
+        xml += row([cell(a.date), cell(fourn?.nom || ''), cell(art?.designation || ''), cell(a.unite), cell(a.quantite, 'Number'), cell(a.prixUnitaire, 'Number'), cell(a.montantTotal, 'Number'), cell(a.statut)]);
+      });
+      xml += row([cell('TOTAL'), cell(''), cell(''), cell(''), cell(''), cell(''), cell(s.totalAchats, 'Number'), cell('')]);
+      xml += '</Table></Worksheet>';
+    }
+
+    xml += '</Workbook>';
+
+    const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reporting-${autoPeriod}-${autoDate}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Excel téléchargé');
+  };
+
+  // --- Export to PDF (print) with tables and/or charts ---
+  const exportAutoPDF = () => {
+    const s = autoStats;
+    const inclTables = exportFormat === 'tableaux' || exportFormat === 'les_deux';
+    const inclCharts = exportFormat === 'graphes' || exportFormat === 'les_deux';
+
+    let body = '';
+
+    // Production section
+    if (exportSections.production) {
+      body += `<h2>🏭 Production — ${periodLabels[autoPeriod]}</h2>`;
+      if (inclTables) {
+        body += `<div class="meta"><div class="meta-box">Objectif<strong>${s.totalProdObj}</strong></div><div class="meta-box">Réalisé<strong>${s.totalProdReal}</strong></div><div class="meta-box">Rendement<strong>${s.rendement}%</strong></div><div class="meta-box">Pertes<strong>${s.totalPertes}</strong></div></div>`;
+      }
+      if (inclCharts && s.prods.length > 0) {
+        body += buildBarChartSVG([
+          { label: 'Objectif', value: s.totalProdObj, color: '#94a3b8' },
+          { label: 'Réalisé', value: s.totalProdReal, color: '#10b981' },
+          { label: 'Pertes', value: s.totalPertes, color: '#ef4444' },
+        ], 'Production globale');
+      }
+    }
+
+    if (exportSections.productionUnite && Object.keys(s.prodByUnite).length > 0) {
+      body += `<h2>📊 Production par unité</h2>`;
+      if (inclTables) {
+        body += `<table><tr><th>Unité</th><th>Objectif</th><th>Réalisé</th><th>Pertes</th><th>Rendement</th></tr>`;
+        Object.entries(s.prodByUnite).forEach(([u, d]) => {
+          const r = d.obj > 0 ? Math.round((d.real / d.obj) * 100) : 0;
+          body += `<tr><td>${u === 'arachide' ? '🥜 Arachide' : '🍌 Plantain'}</td><td>${d.obj}</td><td>${d.real}</td><td>${d.pertes}</td><td>${r}%</td></tr>`;
+        });
+        body += '</table>';
+      }
+      if (inclCharts) {
+        const items = Object.entries(s.prodByUnite).flatMap(([u, d]) => [
+          { label: `${u === 'arachide' ? 'Ara' : 'Pla'} Obj`, value: d.obj, color: u === 'arachide' ? '#fed7aa' : '#bbf7d0' },
+          { label: `${u === 'arachide' ? 'Ara' : 'Pla'} Réal`, value: d.real, color: u === 'arachide' ? '#ea580c' : '#16a34a' },
+        ]);
+        body += buildBarChartSVG(items, 'Objectif vs Réalisé par unité');
+      }
+    }
+
+    if (exportSections.productionMachine && Object.keys(s.prodByMachine).length > 0) {
+      body += `<h2>🔧 Production par machine</h2>`;
+      if (inclTables) {
+        body += `<table><tr><th>Machine</th><th>Sessions</th><th>Objectif</th><th>Réalisé</th><th>Pertes</th><th>Rendement</th></tr>`;
+        Object.entries(s.prodByMachine).forEach(([m, d]) => {
+          const r = d.obj > 0 ? Math.round((d.real / d.obj) * 100) : 0;
+          body += `<tr><td>${m}</td><td>${d.count}</td><td>${d.obj}</td><td>${d.real}</td><td>${d.pertes}</td><td>${r}%</td></tr>`;
+        });
+        body += '</table>';
+      }
+      if (inclCharts) {
+        const items = Object.entries(s.prodByMachine).map(([m, d]) => ({ label: m, value: d.real, color: '#3b82f6' }));
+        body += buildBarChartSVG(items, 'Réalisé par machine', 600);
+      }
+    }
+
+    if (exportSections.stocks) {
+      body += `<h2>📦 État des stocks</h2>`;
+      if (inclTables) {
+        body += `<table><tr><th>Référence</th><th>Désignation</th><th>Stock</th><th>Seuil</th><th>Statut</th></tr>`;
+        data.stocks.forEach(st => {
+          const total = s.getStockTotal(st.id);
+          const isAlert = total <= st.seuilAlerte;
+          body += `<tr style="${isAlert ? 'background:#fef2f2' : ''}"><td>${st.reference}</td><td>${st.designation}</td><td>${total}</td><td>${st.seuilAlerte}</td><td>${isAlert ? '⚠ ALERTE' : '✅ OK'}</td></tr>`;
+        });
+        body += '</table>';
+      }
+      if (inclCharts) {
+        const alertCount = s.alertesStock.length;
+        const okCount = data.stocks.length - alertCount;
+        body += buildPieChartSVG([
+          { label: 'OK', value: okCount, color: '#10b981' },
+          { label: 'Alerte', value: alertCount, color: '#ef4444' },
+        ], 'Statut des stocks');
+      }
+    }
+
+    if (exportSections.achats) {
+      body += `<h2>💰 Dépenses achats — ${periodLabels[autoPeriod]}</h2>`;
+      if (inclTables) {
+        body += `<div class="meta"><div class="meta-box">Total<strong>${formatMontant(s.totalAchats)} FCFA</strong></div>`;
+        Object.entries(s.achatsByUnite).forEach(([u, t]) => {
+          body += `<div class="meta-box">${u === 'arachide' ? '🥜 Arachide' : u === 'plantain' ? '🍌 Plantain' : '📦 Commun'}<strong>${formatMontant(t)} FCFA</strong></div>`;
+        });
+        body += '</div>';
+      }
+      if (exportSections.achatsDetail && inclTables) {
+        body += `<table><tr><th>Date</th><th>Fournisseur</th><th>Article</th><th>Unité</th><th>Qté</th><th>Total</th></tr>`;
+        s.achats.forEach(a => {
+          const fourn = (data.fournisseurs || []).find(f => f.id === a.fournisseurId);
+          const art = data.stocks.find(st => st.id === a.articleId);
+          body += `<tr><td>${a.date}</td><td>${fourn?.nom || ''}</td><td>${art?.designation || ''}</td><td>${a.unite}</td><td>${a.quantite}</td><td>${formatMontant(a.montantTotal)} FCFA</td></tr>`;
+        });
+        body += '</table>';
+      }
+      if (inclCharts && Object.keys(s.achatsByUnite).length > 0) {
+        const colors = { arachide: '#ea580c', plantain: '#16a34a', commun: '#64748b' };
+        const items = Object.entries(s.achatsByUnite).map(([u, t]) => ({
+          label: u === 'arachide' ? 'Arachide' : u === 'plantain' ? 'Plantain' : 'Commun',
+          value: t, color: (colors as Record<string, string>)[u] || '#94a3b8',
+        }));
+        body += buildPieChartSVG(items, 'Répartition des dépenses');
+      }
+    }
+
+    const html = `<!DOCTYPE html><html><head><title>Reporting ${periodLabels[autoPeriod]} — ${autoDate}</title>
+    <style>
+      body{font-family:'Inter',Arial,sans-serif;max-width:900px;margin:30px auto;padding:20px;color:#1e293b;font-size:13px}
+      h1{color:#b45309;text-align:center;font-size:20px;margin-bottom:4px}
+      h2{color:#334155;font-size:14px;border-left:4px solid #d97706;padding-left:10px;margin-top:24px}
+      .subtitle{text-align:center;color:#64748b;font-size:12px;font-style:italic}
+      table{width:100%;border-collapse:collapse;margin:8px 0}
+      th,td{border:1px solid #cbd5e1;padding:6px 10px;text-align:left;font-size:12px}
+      th{background:#f1f5f9;font-weight:600}
+      .meta{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+      .meta-box{border:1px solid #e2e8f0;padding:8px 16px;text-align:center;border-radius:6px;flex:1;min-width:120px}
+      .meta-box strong{display:block;font-size:14px;margin-top:4px}
+      .footer{margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:20px;border-top:2px solid #d97706;padding-top:16px}
+      .footer div{border:1px solid #e2e8f0;padding:16px;min-height:60px;border-radius:6px}
+      @media print{body{margin:0;padding:10px}}
+    </style></head><body>
+      <h1>KAFARM INDUSTRY SARL</h1>
+      <h1 style="font-size:16px">REPORTING ${periodLabels[autoPeriod].toUpperCase()}</h1>
+      <p class="subtitle">${autoPeriod === 'jour' ? autoDate : autoPeriod === 'semaine' ? 'Semaine du ' + autoDate : 'Mois ' + autoDate.slice(0, 7)} — ${exportFormat === 'tableaux' ? 'Tableaux uniquement' : exportFormat === 'graphes' ? 'Graphiques uniquement' : 'Tableaux & Graphiques'}</p>
+      ${body}
+      <div class="footer"><div><strong>Signature — Gestionnaire de site</strong></div><div><strong>Visa — Direction</strong></div></div>
+      <p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:20px">KAFARM INDUSTRY SARL</p>
+    </body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.print();
+  };
+
   return (
     <div>
       <h2 className="text-2xl font-bold font-heading text-slate-800 mb-6">Reporting</h2>
@@ -195,7 +462,67 @@ export default function Reporting({ rapports, data, onChange }: Props) {
             </div>
             <input type="date" value={autoDate} onChange={e => setAutoDate(e.target.value)} className="border rounded-lg px-3 py-2 text-sm" />
             <span className="text-sm text-slate-500">Reporting {periodLabels[autoPeriod].toLowerCase()} — {autoPeriod === 'jour' ? autoDate : autoPeriod === 'semaine' ? `Semaine du ${autoDate}` : autoDate.slice(0, 7)}</span>
+            <button onClick={() => setShowExportOptions(!showExportOptions)} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium ml-auto">⬇ Exporter</button>
           </div>
+
+          {/* Export options panel */}
+          {showExportOptions && (
+            <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-5 border-l-4 border-l-amber-500">
+              <h3 className="font-bold text-slate-700 mb-3">📥 Options d&apos;export</h3>
+              <div className="grid md:grid-cols-3 gap-6">
+                {/* Format choice */}
+                <div>
+                  <h4 className="text-sm font-bold text-slate-600 mb-2">Format du contenu</h4>
+                  <div className="space-y-2">
+                    {([['tableaux', '📋 Tableaux uniquement'], ['graphes', '📊 Graphiques uniquement'], ['les_deux', '📋📊 Tableaux + Graphiques']] as const).map(([val, label]) => (
+                      <label key={val} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="exportFormat" checked={exportFormat === val} onChange={() => setExportFormat(val)}
+                          className="w-4 h-4 text-amber-500 focus:ring-amber-400" />
+                        <span className={`text-sm ${exportFormat === val ? 'font-medium text-slate-800' : 'text-slate-600'}`}>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sections to include */}
+                <div>
+                  <h4 className="text-sm font-bold text-slate-600 mb-2">Sections à inclure</h4>
+                  <div className="space-y-2">
+                    {([
+                      ['production', '🏭 Production globale'],
+                      ['productionUnite', '📊 Production par unité'],
+                      ['productionMachine', '🔧 Production par machine'],
+                      ['stocks', '📦 État des stocks'],
+                      ['achats', '💰 Dépenses achats'],
+                      ['achatsDetail', '📋 Détail des achats'],
+                    ] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={exportSections[key]} onChange={() => toggleSection(key)}
+                          className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400" />
+                        <span className={`text-sm ${exportSections[key] ? 'font-medium text-slate-800' : 'text-slate-500'}`}>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Export buttons */}
+                <div>
+                  <h4 className="text-sm font-bold text-slate-600 mb-2">Télécharger</h4>
+                  <div className="space-y-2">
+                    <button onClick={exportAutoPDF} className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2">
+                      📄 PDF / Imprimer
+                      <span className="text-[10px] text-blue-500 ml-auto">{exportFormat === 'tableaux' ? 'tableaux' : exportFormat === 'graphes' ? 'graphiques' : 'tableaux + graphiques'}</span>
+                    </button>
+                    <button onClick={exportAutoExcel} className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2">
+                      📊 Excel (.xls)
+                      <span className="text-[10px] text-emerald-500 ml-auto">tableaux de données</span>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-2">💡 Les graphiques SVG sont inclus dans l&apos;export PDF. Excel contient les données brutes en tableaux.</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Production Summary */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
